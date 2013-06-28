@@ -1,59 +1,46 @@
 (ns nurblizer.core
-  (:gen-class :name nurblizer.core)
-  (:use compojure.core nurblizer.helpers)
-  (:require
-    [clojure.string :as str]
-    [ring.adapter.jetty :as ring]
-    [compojure.core :as compojure]
-    [compojure.route :as route]
-    [compojure.handler :as handler]))
+      (:gen-class)
+      (:use compojure.core)
+      (:require
+        [clojure.string :as str]
+        [clostache.parser :as clostache]
+        [ring.adapter.jetty :as ring]
+        [compojure.route :as route]
+        [compojure.handler :as handler]))
+
+    ;; main nurble stuff
+    (def nouns
+      (->> (-> (slurp (clojure.java.io/resource "nouns.txt")) ; read in nouns.txt
+               (str/split #"\n"))                             ; split by line
+           (map (comp str/trim str/upper-case))               ; feed the lines through upper-case and trim
+           set))                                              ; transform into a set
 
 
-; Read in the nouns file on startup
-(def nouns
-  (map (comp str/trim str/lower-case)
-       (-> (slurp (clojure.java.io/resource "nouns.txt"))
-           (str/split #"\n"))))
 
+    (def nurble-replacement-text "<span class=\"nurble\">nurble</span>")
 
-; Nurblize function: now with recursion!
-(defn nurble
-  ([text]
-  ; First run: prepare the wordlist and upper-case the text.
-   (let [words (-> text
-                   str/lower-case
-                   (str/replace #"[^a-z ]" "")
-                   (str/split #"\s"))]
-     (nurble (str/upper-case text) words)))
+    (defn nurble-word [word]
+      (get nouns (str/upper-case word) nurble-replacement-text)) ; return word if word in set else nurble
 
-  ([text words]
-  ; Recursively update <text> by replacing each <word> of <words> iff <word> is in nouns
-   (if (not (empty? words))
-     (let [w (first words)
-           pattern (re-pattern (str "(?i)(\\b)" w "(\\b)"))
-           replacement "$1<span class=\"nurble\">nurble</span>$2"
-           text (if (some (partial = w) nouns)
-                  (str/replace text pattern replacement)
-                  text)]
-       (recur text (rest words)))
-     (str/replace text #"\n" "<br>"))))
+    (defn nurble [text]
+      (str/replace text #"\n|\w+" #(case %               ; using anon func literal, switch on argument
+                                      "\n" "<br>"        ; when arg is newline replace with br
+                                      (nurble-word %)))) ; otherwise nurble the argument (a word)
 
+    ;; webserver stuff
+    (defn read-template [template-file]
+      (slurp (clojure.java.io/resource (str "templates/" template-file ".mustache"))))
 
-; Define handlers
-(defn index-view []
-  (render "index" {}))
+    (defn render
+      ([template-file params]
+       (clostache/render (read-template template-file) params
+                         {:_header (read-template "_header")
+                          :_footer (read-template "_footer") })))
 
-(defn nurble-view [text]
-  (render "nurble" {:text (nurble text)}))
+    (defroutes main-routes
+      (GET "/"        []     (render "index" {}))
+      (POST "/nurble" [text] (render "nurble" {:text (nurble text)}))
+      (route/resources "/static"))
 
-
-; Routes
-(defroutes main-routes
-  (GET "/" [] (index-view))
-  (POST "/nurble" [text] (nurble-view text))
-  (route/resources "/static"))
-
-
-; And finally, the server itself
-(defn -main []
-  (ring/run-jetty (handler/site main-routes) {:port 9000}))
+    (defn -main []
+      (ring/run-jetty (handler/site main-routes) {:port 9000}))
