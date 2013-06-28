@@ -9,11 +9,10 @@
         [compojure.handler :as handler]))
 
     ;; main nurble stuff
-    (def nouns
-      (->> (-> (slurp (clojure.java.io/resource "nouns.txt")) ; read in nouns.txt
-               (str/split #"\n"))                             ; split by line
-           (map (comp str/trim str/upper-case))               ; feed the lines through upper-case and trim
-           set))                                              ; transform into a set
+    (def nouns                                                     ; map nouns into a set
+      (set (map (comp str/trim str/upper-case)                     ; upper-case and trim lines
+                (-> (slurp (clojure.java.io/resource "nouns.txt")) ; load in nouns.txt
+                    (str/split #"\n")))))                          ; split by line
 
 
 
@@ -23,9 +22,10 @@
       (get nouns (str/upper-case word) nurble-replacement-text)) ; return word if word in set else nurble
 
     (defn nurble [text]
-      (str/replace text #"\n|\w+" #(case %               ; using anon func literal, switch on argument
-                                      "\n" "<br>"        ; when arg is newline replace with br
-                                      (nurble-word %)))) ; otherwise nurble the argument (a word)
+      (str/replace (str/replace (str/upper-case text) #"[^A-Z ]" "") 
+        #"\n|\w+" #(case %              ; using anon func literal, switch on arg
+                    "\n" "<br>"         ; when arg is newline replace with br
+                    (nurble-word %))))  ; otherwise nurble the argument (a word)
 
     ;; webserver stuff
     (defn read-template [template-file]
