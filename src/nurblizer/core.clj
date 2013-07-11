@@ -22,7 +22,7 @@
     (get nouns (str/upper-case word) nurble-replacement-text)) ; return word if word in set else nurble
 
   (defn normalize [text]
-    (str/replace (str/upper-case text) #"[^A-Z ]" ""))
+    (str/replace text #"[^a-zA-Z ]" ""))
 
   (defn nurble [text]
     (str/replace (normalize text) 
